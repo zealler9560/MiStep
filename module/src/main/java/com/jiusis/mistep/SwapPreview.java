@@ -41,14 +41,21 @@ final class SwapPreview {
     private boolean closed;
     private boolean removalFailed;
 
-    /** Target Android 17 moved capture APIs to *Internal; WMS resolves display 0. */
+    /** Target Android 17 moved capture APIs to *Internal; OS2 retains ScreenCapture. */
     static Bitmap capture(ClassLoader cl, int width, int height) throws Throwable {
-        Class<?> builder = XposedHelpers.findClass(
-                "android.window.ScreenCaptureInternal$CaptureArgs$Builder", cl);
+        Class<?> builder = XposedHelpers.findClassIfExists(
+                "android.window.ScreenCapture$CaptureArgs$Builder", cl);
+        if (builder == null) {
+            builder = XposedHelpers.findClass(
+                    "android.window.ScreenCaptureInternal$CaptureArgs$Builder", cl);
+        }
         Object args = XposedHelpers.newInstance(builder);
         XposedHelpers.callMethod(args, "setFrameScale", 1f);
         XposedHelpers.callMethod(args, "setIncludeSystemOverlays", true);
-        Class<?> capture = XposedHelpers.findClass("android.window.ScreenCaptureInternal", cl);
+        Class<?> capture = XposedHelpers.findClassIfExists("android.window.ScreenCapture", cl);
+        if (capture == null) {
+            capture = XposedHelpers.findClass("android.window.ScreenCaptureInternal", cl);
+        }
         Object listener = XposedHelpers.callStaticMethod(capture, "createSyncCaptureListener");
         Class<?> global = XposedHelpers.findClass("android.view.WindowManagerGlobal", cl);
         Object wm = XposedHelpers.callStaticMethod(global, "getWindowManagerService");
