@@ -17,7 +17,11 @@ final class MiStepStatusBarSampling {
 
     static void install(ClassLoader loader) {
         try {
-            Class<?> callback = XposedHelpers.findClass(CALLBACK, loader);
+            Class<?> callback = XposedHelpers.findClassIfExists(CALLBACK, loader);
+            if (callback == null) {
+                XposedBridge.log("MiStep: status sampling callback class not found, skipping");
+                return;
+            }
             XposedHelpers.findAndHookMethod(callback, "getSampledRegion", android.view.View.class,
                     new XC_MethodHook() {
                 @Override protected void afterHookedMethod(MethodHookParam p) {
@@ -25,8 +29,16 @@ final class MiStepStatusBarSampling {
                         p.setResult(physical((Rect) p.getResult(), MiStepHost.activeStatusBarTransform()));
                 }
             });
-            Class<?> helper = XposedHelpers.findClass(
-                    "com.android.wm.shell.shared.handles.RegionSamplingHelper", loader);
+            Class<?> helper = XposedHelpers.findClassIfExists(
+                    "com.android.systemui.shared.navigationbar.RegionSamplingHelper", loader);
+            if (helper == null) {
+                helper = XposedHelpers.findClassIfExists(
+                        "com.android.wm.shell.shared.handles.RegionSamplingHelper", loader);
+            }
+            if (helper == null) {
+                XposedBridge.log("MiStep: RegionSamplingHelper not found on this ROM, skipping");
+                return;
+            }
             XposedBridge.hookAllConstructors(helper, new XC_MethodHook() {
                 @Override protected void afterHookedMethod(MethodHookParam p) {
                     if (isStatusHelper(p.thisObject)) synchronized (helpers) {
