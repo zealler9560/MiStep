@@ -10,6 +10,7 @@ import android.view.View;
 import android.view.WindowManager;
 import android.view.ViewTreeObserver;
 import android.view.inspector.WindowInspector;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.IdentityHashMap;
@@ -94,11 +95,11 @@ final class MiStepStatusBar {
         hiddenOwner = null;
         Consumer<List<View>> listener = views -> include(ticket, views);
         lease.begin(ticket, () -> {
-            try { WindowInspector.removeGlobalWindowViewsListener(listener); }
+            try { tryRemoveGlobalWindowViewsListener(listener); }
             catch (Throwable error) { log.accept("status bar listener removal: " + error); }
         }, expire);
         try {
-            WindowInspector.addGlobalWindowViewsListener(main::post, listener);
+            tryAddGlobalWindowViewsListener(main::post, listener);
         } catch (Throwable error) {
             log.accept("status bar listener unavailable; using attached windows: " + error);
         }
@@ -157,7 +158,7 @@ final class MiStepStatusBar {
         log.accept("native status reveal deferred while hidden");
         if (observingNativeRoots) return;
         observingNativeRoots = true;
-        try { WindowInspector.addGlobalWindowViewsListener(main::post, nativeRoots); }
+        try { tryAddGlobalWindowViewsListener(main::post, nativeRoots); }
         catch (Throwable error) {
             observingNativeRoots = false;
             log.accept("native status root observer unavailable: " + error);
@@ -179,7 +180,7 @@ final class MiStepStatusBar {
     private void stopNativeRootObservationIfEmpty() {
         if (!nativeHidden.isEmpty() || !observingNativeRoots) return;
         observingNativeRoots = false;
-        try { WindowInspector.removeGlobalWindowViewsListener(nativeRoots); }
+        try { tryRemoveGlobalWindowViewsListener(nativeRoots); }
         catch (Throwable error) { log.accept("native status root observer removal: " + error); }
     }
 
@@ -328,5 +329,26 @@ final class MiStepStatusBar {
                 view.invalidate();
             }
         } finally { immediateRestore = false; }
+    }
+
+    private static void tryAddGlobalWindowViewsListener(java.util.concurrent.Executor executor,
+            Consumer<List<View>> listener) {
+        if (android.os.Build.VERSION.SDK_INT < 36) return;
+        try {
+            Method m = WindowInspector.class.getMethod("addGlobalWindowViewsListener",
+                    java.util.concurrent.Executor.class, Consumer.class);
+            m.invoke(null, executor, listener);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static void tryRemoveGlobalWindowViewsListener(Consumer<List<View>> listener) {
+        if (android.os.Build.VERSION.SDK_INT < 36) return;
+        try {
+            Method m = WindowInspector.class.getMethod("removeGlobalWindowViewsListener",
+                    Consumer.class);
+            m.invoke(null, listener);
+        } catch (Throwable ignored) {
+        }
     }
 }
