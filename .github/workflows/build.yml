@@ -1,0 +1,44 @@
+name: build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install platform 37, build-tools 37 and NDK
+        shell: pwsh
+        run: |
+          $sdkmanager = "$env:ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager.bat"
+          if (-not (Test-Path $sdkmanager)) { $sdkmanager = (Get-ChildItem "$env:ANDROID_HOME/cmdline-tools" -Recurse -Filter sdkmanager.bat | Select-Object -First 1).FullName }
+          'y' | & $sdkmanager --licenses | Out-Null
+          & $sdkmanager 'platforms;android-37.0' 'build-tools;37.0.0' 'ndk;28.2.13676358'
+          if (-not (Test-Path "$env:ANDROID_HOME/platforms/android-37.0")) {
+            if (Test-Path "$env:ANDROID_HOME/platforms/android-37") {
+              Copy-Item -Recurse "$env:ANDROID_HOME/platforms/android-37" "$env:ANDROID_HOME/platforms/android-37.0"
+            } else {
+              throw 'Android platform 37 not installed under either name'
+            }
+          }
+
+      - name: Build unsigned APK
+        shell: pwsh
+        run: ./build.ps1 -Unsigned
+
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: mistep-dist
+          path: dist/
