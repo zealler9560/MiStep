@@ -2831,6 +2831,7 @@ public class HostEntry implements IXposedHookLoadPackage {
                     log("missing capability, abort");
                     return;
                 }
+                dumpTaskViewSignaturesOnce(sTaskViewFactory.getClass().getClassLoader());
                 // v1.2.1：不再用一次性自锁挡触发器（重启后"呼不出/退不出"的根源）。
                 // 触发器本身是热区+广播，安全；真正危险的是早期自动启动应用，已删除。
                 installTriggers();
@@ -3232,6 +3233,102 @@ public class HostEntry implements IXposedHookLoadPackage {
 
     @SuppressWarnings("unused")
     private static final Map<String, String> NOTES = new LinkedHashMap<>();
+
+    private static volatile boolean sProbeSignaturesDumped = false;
+
+    private static synchronized void dumpTaskViewSignaturesOnce(ClassLoader cl) {
+        if (sProbeSignaturesDumped) {
+            return;
+        }
+        sProbeSignaturesDumped = true;
+        try {
+            if (cl == null && sTaskViewFactory != null) {
+                cl = sTaskViewFactory.getClass().getClassLoader();
+            }
+            if (cl == null && sContext != null) {
+                cl = sContext.getClassLoader();
+            }
+            if (cl == null) {
+                cl = HostEntry.class.getClassLoader();
+            }
+            String[] targetClasses = {
+                "com.android.wm.shell.taskview.TaskViewFactoryController$TaskViewFactoryImpl",
+                "com.android.wm.shell.taskview.TaskViewTransitions",
+                "com.android.wm.shell.taskview.TaskViewTaskController",
+                "com.android.wm.shell.taskview.TaskView"
+            };
+            for (String targetClass : targetClasses) {
+                dumpClassSignatures(cl, targetClass);
+            }
+        } catch (Throwable t) {
+            try {
+                XposedBridge.log("MiStepProbe SIG: dump signatures failed: " + t);
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    private static void dumpClassSignatures(ClassLoader cl, String className) {
+        try {
+            Class<?> clazz = null;
+            try {
+                clazz = Class.forName(className, false, cl);
+            } catch (ClassNotFoundException | NoClassDefFoundError ignored) {
+            }
+            if (clazz == null) {
+                try {
+                    clazz = XposedHelpers.findClass(className, cl);
+                } catch (Throwable ignored) {
+                }
+            }
+            if (clazz == null) {
+                XposedBridge.log("MiStepProbe SIG: " + className + " NOT FOUND");
+                return;
+            }
+            StringBuilder sb = new StringBuilder();
+            sb.append("MiStepProbe SIG: === ").append(className).append(" ===\n");
+            sb.append("MiStepProbe SIG: Fields:\n");
+            Field[] fields = clazz.getDeclaredFields();
+            if (fields.length == 0) {
+                sb.append("MiStepProbe SIG:   (none)\n");
+            } else {
+                for (Field f : fields) {
+                    sb.append("MiStepProbe SIG:   ");
+                    String mods = Modifier.toString(f.getModifiers());
+                    if (!mods.isEmpty()) {
+                        sb.append(mods).append(' ');
+                    }
+                    sb.append(f.getType().getName()).append(' ').append(f.getName()).append('\n');
+                }
+            }
+            sb.append("MiStepProbe SIG: Methods:\n");
+            Method[] methods = clazz.getDeclaredMethods();
+            if (methods.length == 0) {
+                sb.append("MiStepProbe SIG:   (none)\n");
+            } else {
+                for (Method m : methods) {
+                    sb.append("MiStepProbe SIG:   ");
+                    String mods = Modifier.toString(m.getModifiers());
+                    if (!mods.isEmpty()) {
+                        sb.append(mods).append(' ');
+                    }
+                    sb.append(m.getReturnType().getName()).append(' ').append(m.getName()).append('(');
+                    Class<?>[] params = m.getParameterTypes();
+                    for (int i = 0; i < params.length; i++) {
+                        if (i > 0) sb.append(", ");
+                        sb.append(params[i].getName());
+                    }
+                    sb.append(")\n");
+                }
+            }
+            XposedBridge.log(sb.toString().trim());
+        } catch (Throwable t) {
+            try {
+                XposedBridge.log("MiStepProbe SIG: " + className + " NOT FOUND");
+            } catch (Throwable ignored) {
+            }
+        }
+    }
 }
 
 
