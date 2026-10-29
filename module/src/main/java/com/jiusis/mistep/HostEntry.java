@@ -2659,28 +2659,34 @@ public class HostEntry implements IXposedHookLoadPackage {
 
     private void hookBackGestureDiagnostics(ClassLoader cl) {
         try {
-            Class<?> receiver = XposedHelpers.findClass(
+            Class<?> receiver = XposedHelpers.findClassIfExists(
                     "com.android.systemui.navigationbar.gestural.DisplayBackGestureHandlerImpl$inputEventReceiver$1", cl);
-            XposedBridge.hookAllMethods(receiver, "onInputEvent", new XC_MethodHook() {
-                @Override protected void beforeHookedMethod(MethodHookParam p) {
-                    if (p.args.length == 1 && p.args[0] instanceof android.view.MotionEvent)
-                        logBackEvent("DisplayBackGestureHandler", (android.view.MotionEvent) p.args[0]);
-                }
-            });
-            log("DisplayBackGestureHandler input diagnostics installed");
+            if (receiver != null) {
+                XposedBridge.hookAllMethods(receiver, "onInputEvent", new XC_MethodHook() {
+                    @Override protected void beforeHookedMethod(MethodHookParam p) {
+                        if (p.args.length == 1 && p.args[0] instanceof android.view.MotionEvent)
+                            logBackEvent("DisplayBackGestureHandler", (android.view.MotionEvent) p.args[0]);
+                    }
+                });
+                log("DisplayBackGestureHandler input diagnostics installed");
+            } else {
+                log("DisplayBackGestureHandler input diagnostics skipped (not present on this ROM)");
+            }
         } catch (Throwable error) {
             log("DisplayBackGestureHandler input diagnostics unavailable: " + error);
         }
         try {
-            Class<?> panel = XposedHelpers.findClass(
+            Class<?> panel = XposedHelpers.findClassIfExists(
                     "com.android.systemui.navigationbar.gestural.BackPanelController", cl);
-            XposedBridge.hookAllMethods(panel, "onMotionEvent", new XC_MethodHook() {
-                @Override protected void beforeHookedMethod(MethodHookParam p) {
-                    if (p.args.length == 1 && p.args[0] instanceof android.view.MotionEvent)
-                        logBackEvent("BackPanelController", (android.view.MotionEvent) p.args[0]);
-                }
-            });
-            log("BackPanelController input diagnostics installed");
+            if (panel != null) {
+                XposedBridge.hookAllMethods(panel, "onMotionEvent", new XC_MethodHook() {
+                    @Override protected void beforeHookedMethod(MethodHookParam p) {
+                        if (p.args.length == 1 && p.args[0] instanceof android.view.MotionEvent)
+                            logBackEvent("BackPanelController", (android.view.MotionEvent) p.args[0]);
+                    }
+                });
+                log("BackPanelController input diagnostics installed");
+            }
         } catch (Throwable error) {
             log("BackPanelController input diagnostics unavailable: " + error);
         }
@@ -2695,25 +2701,29 @@ public class HostEntry implements IXposedHookLoadPackage {
         // Native windows now share the main parent coordinate system.
         // Physical/main conversion and pre-return position suppression are unnecessary.
         try {
-            Class<?> util = XposedHelpers.findClass(
+            Class<?> util = XposedHelpers.findClassIfExists(
                     "com.android.wm.shell.common.transition.MiuiTransitionHandlerUtil", cl);
-            XposedBridge.hookAllMethods(util, "getAnimBounds", new XC_MethodHook() {
-                @Override protected void afterHookedMethod(MethodHookParam param) {
-                    Object result = param.getResult();
-                    Rect main = MiStepHost.activeMainBounds();
-                    if (!(result instanceof Rect) || main == null || param.args == null
-                            || param.args.length < 2
-                            || !MiStepHost.shouldClampAnimationBounds(
-                                    param.args[0], param.args[1])) return;
-                    Rect original = (Rect) result;
-                    Rect clipped = TransitionBounds.clamp(original, main);
-                    if (clipped == original || clipped.equals(original)) return;
-                    param.setResult(clipped);
-                    log("transition animation clipped " + original + " -> " + clipped
-                            + " main=" + main);
-                }
-            });
-            log("MIUI transition animation bounds clamped to active main pane");
+            if (util != null) {
+                XposedBridge.hookAllMethods(util, "getAnimBounds", new XC_MethodHook() {
+                    @Override protected void afterHookedMethod(MethodHookParam param) {
+                        Object result = param.getResult();
+                        Rect main = MiStepHost.activeMainBounds();
+                        if (!(result instanceof Rect) || main == null || param.args == null
+                                || param.args.length < 2
+                                || !MiStepHost.shouldClampAnimationBounds(
+                                        param.args[0], param.args[1])) return;
+                        Rect original = (Rect) result;
+                        Rect clipped = TransitionBounds.clamp(original, main);
+                        if (clipped == original || clipped.equals(original)) return;
+                        param.setResult(clipped);
+                        log("transition animation clipped " + original + " -> " + clipped
+                                + " main=" + main);
+                    }
+                });
+                log("MIUI transition animation bounds clamped to active main pane");
+            } else {
+                log("MiuiTransitionHandlerUtil not present on this ROM, transition animation clamp skipped");
+            }
         } catch (Throwable error) {
             log("transition animation clamp unavailable: " + error);
         }
