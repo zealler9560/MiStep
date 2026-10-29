@@ -17,9 +17,13 @@ final class MiStepIslandMonitorInput {
 
     static void install(ClassLoader loader, Supplier<Context> context) {
         try {
-            Class<?> listener = XposedHelpers.findClass(
+            Class<?> listener = XposedHelpers.findClassIfExists(
                     "com.android.systemui.statusbar.notification.island.DynamicIslandGestureMonitor$listener$1",
                     loader);
+            if (listener == null) {
+                XposedBridge.log("MiStep: DynamicIsland not present on this ROM, skipping island monitor");
+                return;
+            }
             XposedBridge.hookAllMethods(listener, "onPointerEvent", new XC_MethodHook() {
                 @Override protected void beforeHookedMethod(MethodHookParam p) {
                     MotionEvent copy = null;

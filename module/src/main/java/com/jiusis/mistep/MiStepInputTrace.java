@@ -187,28 +187,32 @@ final class MiStepInputTrace {
             }));
         } catch (Throwable ignored) { }
         try {
-            Class<?> container = XposedHelpers.findClass(
+            Class<?> container = XposedHelpers.findClassIfExists(
                     "com.android.wm.shell.common.transition.animation.MiuiAnimationContainer", cl);
-            retain(XposedBridge.hookAllMethods(container, "getMatrix", new TraceHook() {
-                @Override protected void after(MethodHookParam p) {
-                    if (!active()) return;
-                    long now = SystemClock.uptimeMillis();
-                    synchronized (MiStepInputTrace.class) {
-                        if (now - lastFrame < 32) return;
-                        lastFrame = now;
+            if (container != null) {
+                retain(XposedBridge.hookAllMethods(container, "getMatrix", new TraceHook() {
+                    @Override protected void after(MethodHookParam p) {
+                        if (!active()) return;
+                        long now = SystemClock.uptimeMillis();
+                        synchronized (MiStepInputTrace.class) {
+                            if (now - lastFrame < 32) return;
+                            lastFrame = now;
+                        }
+                        try {
+                            Object leash = XposedHelpers.callMethod(p.thisObject, "getLeash");
+                            line("nativeAnimation layer=" + layer(leash) + " matrix=" + p.getResult());
+                        } catch (Throwable error) { unavailable(error); }
                     }
-                    try {
-                        Object leash = XposedHelpers.callMethod(p.thisObject, "getLeash");
-                        line("nativeAnimation layer=" + layer(leash) + " matrix=" + p.getResult());
-                    } catch (Throwable error) { unavailable(error); }
-                }
-            }));
+                }));
+            }
         } catch (Throwable ignored) { }
     }
 
     private static void hook(ClassLoader cl, String cls, String method, String label) {
         try {
-            retain(XposedBridge.hookAllMethods(XposedHelpers.findClass(cls, cl), method, new TraceHook() {
+            Class<?> targetClass = XposedHelpers.findClassIfExists(cls, cl);
+            if (targetClass == null) return;
+            retain(XposedBridge.hookAllMethods(targetClass, method, new TraceHook() {
                 @Override protected void before(MethodHookParam p) {
                     if (!active() || p.args.length == 0 || !(p.args[0] instanceof MotionEvent)) return;
                     String source = p.args.length > 1 && p.args[1] instanceof String
