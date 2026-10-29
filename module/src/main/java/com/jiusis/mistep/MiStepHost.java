@@ -1827,8 +1827,16 @@ public final class MiStepHost {
                         p.args[1] = h.logicalBounds();
                 }
             };
-            installed.add(XposedHelpers.findAndHookMethod(trans, "setTaskBounds", control, Rect.class, rectGuard));
-            installed.add(XposedHelpers.findAndHookMethod(trans, "lambda$setTaskBounds$6", control, Rect.class, rectGuard));
+            try {
+                installed.add(XposedHelpers.findAndHookMethod(trans, "setTaskBounds", control, Rect.class, rectGuard));
+            } catch (Throwable t) {
+                log("TaskViewTransitions#setTaskBounds hook skipped: " + t);
+            }
+            try {
+                installed.add(XposedHelpers.findAndHookMethod(trans, "lambda$setTaskBounds$6", control, Rect.class, rectGuard));
+            } catch (Throwable t) {
+                log("TaskViewTransitions#lambda$setTaskBounds$6 hook skipped: " + t);
+            }
             java.util.Set<XC_MethodHook.Unhook> external = XposedBridge.hookAllMethods(trans,
                     "isValidTaskView", new XC_MethodHook() {
                 @Override protected void beforeHookedMethod(MethodHookParam p) {
@@ -1838,8 +1846,11 @@ public final class MiStepHost {
                         p.setResult(false);
                 }
             });
-            if (external.isEmpty()) throw new IllegalStateException("no external task change guard");
-            installed.addAll(external);
+            if (external.isEmpty()) {
+                log("TaskViewTransitions#isValidTaskView hook skipped (not present on this ROM)");
+            } else {
+                installed.addAll(external);
+            }
             java.util.Set<XC_MethodHook.Unhook> unfold = XposedBridge.hookAllMethods(trans, "updateBoundsForUnfold", new XC_MethodHook() {
                 @Override protected void beforeHookedMethod(MethodHookParam p) {
                     MiStepHost h = sInstance;
@@ -1858,8 +1869,11 @@ public final class MiStepHost {
                     }
                 }
             });
-            if (unfold.isEmpty()) throw new IllegalStateException("no unfold bounds guard");
-            installed.addAll(unfold);
+            if (unfold.isEmpty()) {
+                log("TaskViewTransitions#updateBoundsForUnfold hook skipped (not present on this ROM)");
+            } else {
+                installed.addAll(unfold);
+            }
             java.util.Set<XC_MethodHook.Unhook> opening = XposedBridge.hookAllMethods(trans, "prepareOpenAnimation", new XC_MethodHook() {
                 @Override protected void beforeHookedMethod(MethodHookParam p) {
                     MiStepHost h = sInstance;
@@ -1875,8 +1889,11 @@ public final class MiStepHost {
                     }
                 }
             });
-            if (opening.isEmpty()) throw new IllegalStateException("no native opening guard");
-            installed.addAll(opening);
+            if (opening.isEmpty()) {
+                log("TaskViewTransitions#prepareOpenAnimation hook skipped (not present on this ROM)");
+            } else {
+                installed.addAll(opening);
+            }
             boundsHooksReady = true;
             log("logical bounds guards installed: getter/queue/consumer/unfold");
         } catch (Throwable error) {
