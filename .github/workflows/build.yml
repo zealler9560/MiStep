@@ -15,14 +15,12 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Install platform 37, build-tools 37 and NDK
         shell: pwsh
         run: |
-          $sdkmanager = "$env:ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager.bat"
-          if (-not (Test-Path $sdkmanager)) { $sdkmanager = (Get-ChildItem "$env:ANDROID_HOME/cmdline-tools" -Recurse -Filter sdkmanager.bat | Select-Object -First 1).FullName }
+          if (-not $env:ANDROID_HOME) { throw 'ANDROID_HOME not set on runner' }
+          $sdkmanager = (Get-ChildItem "$env:ANDROID_HOME/cmdline-tools" -Recurse -Filter sdkmanager.bat | Sort-Object FullName -Descending | Select-Object -First 1).FullName
+          if (-not $sdkmanager) { throw 'sdkmanager not found' }
           'y' | & $sdkmanager --licenses | Out-Null
           & $sdkmanager 'platforms;android-37.0' 'build-tools;37.0.0' 'ndk;28.2.13676358'
           if (-not (Test-Path "$env:ANDROID_HOME/platforms/android-37.0")) {
