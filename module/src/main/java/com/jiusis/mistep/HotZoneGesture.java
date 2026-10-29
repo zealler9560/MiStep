@@ -9,6 +9,7 @@ import android.view.InputDevice;
 import android.view.MotionEvent;
 import android.view.WindowManager;
 import java.lang.reflect.Proxy;
+import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 
 /** Spy channel: taps retain their original target. Only an accepted swipe pilfers. */
@@ -27,14 +28,26 @@ public final class HotZoneGesture {
         this.trigger = trigger;
     }
     public static void install(Context context, Runnable trigger) {
+        try {
+            XposedBridge.log("MiStepProbe GESTURE: install() enter, mainLooper="
+                    + (Looper.myLooper() == Looper.getMainLooper()) + " context=" + context);
+        } catch (Throwable ignored) {}
         if (Looper.myLooper() != Looper.getMainLooper()) {
             MAIN.post(() -> install(context, trigger));
             return;
         }
-        if (instance != null) return;
+        if (instance != null) {
+            try {
+                XposedBridge.log("MiStepProbe GESTURE: install() skipped, instance already exists");
+            } catch (Throwable ignored) {}
+            return;
+        }
         HotZoneGesture g = new HotZoneGesture(context, trigger);
         try {
             ClassLoader cl = context.getClassLoader();
+            try {
+                XposedBridge.log("MiStepProbe GESTURE: attempting spy registration cl=" + cl);
+            } catch (Throwable ignored) {}
             Class<?> compat = XposedHelpers.findClass(
                     "com.android.systemui.shared.system.InputMonitorCompat", cl);
             Class<?> listener = XposedHelpers.findClass(
@@ -50,7 +63,16 @@ public final class HotZoneGesture {
                             } else if ("toString".equals(method.getName())) return "MiStepGestureListener";
                             else if ("hashCode".equals(method.getName())) return System.identityHashCode(self);
                             else if ("equals".equals(method.getName())) return self == args[0];
+                            else {
+                                try {
+                                    XposedBridge.log("MiStepProbe GESTURE: proxy called unexpected method="
+                                            + (method != null ? method.getName() : "null"));
+                                } catch (Throwable ignored) {}
+                            }
                         } catch (Throwable error) {
+                            try {
+                                XposedBridge.log("MiStepProbe GESTURE: callback error: " + error);
+                            } catch (Throwable ignored) {}
                             g.reset();
                             log("gesture callback stopped: " + error);
                         }
@@ -61,13 +83,26 @@ public final class HotZoneGesture {
             if (g.receiver == null) throw new IllegalStateException("no receiver");
             g.enabled = true;
             instance = g;
+            try {
+                XposedBridge.log("MiStepProbe GESTURE: spy registration success, monitor="
+                        + g.monitor + " receiver=" + g.receiver);
+            } catch (Throwable ignored) {}
             log("gesture spy installed; no touch overlay; tap pass-through enabled");
         } catch (Throwable error) {
+            try {
+                XposedBridge.log("MiStepProbe GESTURE: spy registration failed: " + error);
+            } catch (Throwable ignored) {}
             g.dispose();
             log("gesture spy unavailable: " + error);
         }
     }
     private void onMotion(MotionEvent e) {
+        try {
+            XposedBridge.log("MiStepProbe GESTURE: onMotion enter action="
+                    + (e != null ? MotionEvent.actionToString(e.getActionMasked()) : "null")
+                    + " raw=(" + (e != null ? e.getRawX() : "null") + "," + (e != null ? e.getRawY() : "null") + ")"
+                    + " enabled=" + enabled);
+        } catch (Throwable ignored) {}
         if (!enabled || !Integer.valueOf(0).equals(XposedHelpers.callMethod(e, "getDisplayId"))
                 || !e.isFromSource(InputDevice.SOURCE_TOUCHSCREEN)) return;
         WindowManager wm = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
@@ -98,6 +133,9 @@ public final class HotZoneGesture {
                     XposedHelpers.callMethod(platform, "pilferPointers");
                 } catch (Throwable error) {
                     reset();
+                    try {
+                        XposedBridge.log("MiStepProbe GESTURE: pilfer failed; no trigger: " + error);
+                    } catch (Throwable ignored) {}
                     log("pilfer failed; no trigger: " + error);
                     return;
                 }
@@ -113,10 +151,16 @@ public final class HotZoneGesture {
                         // 主区在滑动的相反一侧：左角滑出左侧栏 → 主区在右；右角滑出右侧栏 → 主区在左。
                         boolean mainRight = swipe.sign() > 0;
                         MiStepHost.setPendingMainSide(mainRight);
+                        try {
+                            XposedBridge.log("MiStepProbe GESTURE: gesture edge=" + (mainRight ? "right" : "left") + " -> open");
+                        } catch (Throwable ignored) {}
                         log("gesture edge=" + (mainRight ? "right" : "left") + " -> open");
                         trigger.run();
                     }
                 }, 65L);
+                try {
+                    XposedBridge.log("MiStepProbe GESTURE: corner swipe accepted; pilfered once");
+                } catch (Throwable ignored) {}
                 log("corner swipe accepted; pilfered once");
             }
         } else if (action == MotionEvent.ACTION_CANCEL || action == MotionEvent.ACTION_POINTER_DOWN
@@ -133,6 +177,9 @@ public final class HotZoneGesture {
             XposedHelpers.callMethod(platform, "pilferPointers");
             return true;
         } catch (Throwable error) {
+            try {
+                XposedBridge.log("MiStepProbe GESTURE: pilfer failed; no trigger: " + error);
+            } catch (Throwable ignored) {}
             log("pilfer failed; no trigger: " + error);
             return false;
         }
@@ -156,12 +203,22 @@ public final class HotZoneGesture {
         reset();
         if (receiver != null) {
             try { XposedHelpers.callMethod(receiver, "dispose"); }
-            catch (Throwable e) { log("receiver dispose: " + e); }
+            catch (Throwable e) {
+                try {
+                    XposedBridge.log("MiStepProbe GESTURE: receiver dispose: " + e);
+                } catch (Throwable ignored) {}
+                log("receiver dispose: " + e);
+            }
             finally { receiver = null; }
         }
         if (monitor != null) {
             try { XposedHelpers.callMethod(monitor, "dispose"); }
-            catch (Throwable e) { log("monitor dispose: " + e); }
+            catch (Throwable e) {
+                try {
+                    XposedBridge.log("MiStepProbe GESTURE: monitor dispose: " + e);
+                } catch (Throwable ignored) {}
+                log("monitor dispose: " + e);
+            }
             finally { monitor = null; }
         }
     }
