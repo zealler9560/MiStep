@@ -412,7 +412,34 @@ final class MiStepSystemActions {
     private static synchronized void logFailure(String action, Throwable error) {
         if (logsRemaining <= 0) return;
         logsRemaining--;
-        XposedBridge.log("[Mi Step] system action " + action + " unavailable: "
-                + error.getClass().getSimpleName());
+        String missingClass = findMissingClassName(error);
+        String reason = error != null ? error.getClass().getSimpleName() : "unknown";
+        if (missingClass != null && !missingClass.isEmpty()) {
+            reason = reason + ": " + missingClass;
+        } else if (error != null && error.getMessage() != null && !error.getMessage().isEmpty()) {
+            reason = reason + ": " + error.getMessage();
+        }
+        XposedBridge.log("[Mi Step] system action " + action + " unavailable: " + reason);
+    }
+
+    private static String findMissingClassName(Throwable error) {
+        for (Throwable t = error; t != null; t = t.getCause()) {
+            if (t instanceof ClassNotFoundException || t instanceof NoClassDefFoundError) {
+                String msg = t.getMessage();
+                if (msg != null && !msg.isEmpty()) {
+                    int firstQuote = msg.indexOf('"');
+                    int secondQuote = (firstQuote != -1) ? msg.indexOf('"', firstQuote + 1) : -1;
+                    if (firstQuote != -1 && secondQuote != -1) {
+                        return msg.substring(firstQuote + 1, secondQuote);
+                    }
+                    int onPath = msg.indexOf(" on path:");
+                    if (onPath != -1) {
+                        return msg.substring(0, onPath).trim();
+                    }
+                    return msg.trim();
+                }
+            }
+        }
+        return null;
     }
 }
